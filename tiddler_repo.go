@@ -5,7 +5,7 @@ import "fmt"
 type TiddlerRepo interface {
 	List() []Tiddler
 	Get(key string) (Tiddler, bool)
-	Put(tiddler Tiddler) error
+	Put(tiddler Tiddler) (int, error)
 	Remove(key string) error
 }
 
@@ -33,10 +33,18 @@ func (repo inMemRepo) Get(key string) (tiddler Tiddler, ok bool) {
 	return
 }
 
-func (repo inMemRepo) Put(tiddler Tiddler) error {
+func (repo inMemRepo) Put(tiddler Tiddler) (int, error) {
+	var rev int
+
+	if prev, ok := repo.Get(tiddler.Title); ok {
+		rev = prev.Revision
+		rev++
+	}
+	tiddler.Revision = rev
+
 	repo.tiddlers[tiddler.Title] = tiddler
 
-	return nil
+	return rev, nil
 }
 
 func (repo inMemRepo) Remove(key string) error {
@@ -51,7 +59,8 @@ func (repo inMemRepo) Remove(key string) error {
 }
 
 type Tiddler struct {
-	Title string
-	Meta  []byte
-	Text  string
+	Title    string
+	Meta     []byte
+	Text     string
+	Revision int
 }

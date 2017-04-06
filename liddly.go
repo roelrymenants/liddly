@@ -112,13 +112,13 @@ func detail(w http.ResponseWriter, r *http.Request) {
 		tiddler.Meta = meta
 
 		//create the tiddler
-		err = repo.Put(tiddler)
+		rev, err := repo.Put(tiddler)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
-		etag := fmt.Sprintf(`"bag/%s/%d:%032x"`, url.QueryEscape(title), 0, md5.Sum(meta))
+		etag := fmt.Sprintf(`"bag/%s/%d:%032x"`, url.QueryEscape(title), rev, md5.Sum(meta))
 		w.Header().Set("ETag", etag)
 		w.WriteHeader(http.StatusNoContent)
 	default:

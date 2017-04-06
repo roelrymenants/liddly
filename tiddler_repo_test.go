@@ -12,13 +12,13 @@ func TestInMemRepo(t *testing.T) {
 	key := "x"
 	tiddler := Tiddler{Title: key}
 
-	err := repo.Put(tiddler)
+	rev, err := repo.Put(tiddler)
 
-	if err != nil {
+	if err != nil || rev != 0 {
 		t.Error("Error putting tiddler in repo")
 	}
 
-	if get, ok := repo.Get(key); !ok || get != tiddler {
+	if _, ok := repo.Get(key); !ok {
 		t.Error("Put and get are not symmetric")
 	}
 
