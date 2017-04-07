@@ -33,37 +33,41 @@ func main() {
 
 	lock, err := Acquire(lockfile)
 	if err != nil {
-		if *preemptive {
-			os.Create(watchfile)
-			log.Println("Lock file exists. Initialized remote shutdown.")
-		} else {
-			log.Println("Lock file exists. Did not initialize remote shutdown. Exit.")
-		}
+		exit(preemptive)
 		return
 	}
 	defer lock.Release()
 
 	folderWatch, err := NewFolderWatch()
 	if err != nil {
-		log.Println("Could not start watch on current dir")
+		log.Println("Could not start watch on current dir", err)
 		return
 	}
 	defer folderWatch.Close()
 
 	shutdownOnCreate(folderWatch, watchfile, asyncShutdown)
-
-	c := make(chan os.Signal)
-	signal.Notify(c, os.Interrupt)
-	go func() {
-		<-c
-		asyncShutdown()
-	}()
+	shutdownOnSignal(asyncShutdown)
 
 	repository = repo.NewSqlite(dbfile)
-	tiddlyweb.Register(repository)
+	tiddlyweb.RegisterHandlers(repository)
 
 	log.Println("Listening for connections on", *address)
 	log.Println(srv.ListenAndServe())
+}
+
+func exit(preemptive *bool) {
+	if *preemptive {
+		file, err := os.Create(watchfile)
+		if err != nil {
+			log.Println("Error creating shutdown file", err)
+			return
+		}
+
+		file.Close()
+		log.Println("Lock file exists. Initialized remote shutdown.")
+	} else {
+		log.Println("Lock file exists. Did not initialize remote shutdown. Exit.")
+	}
 }
 
 func asyncShutdown() {
@@ -86,5 +90,14 @@ func shutdownOnCreate(folderWatch *FolderWatch, createdFile string, shutdownCall
 				return
 			}
 		}
+	}()
+}
+
+func shutdownOnSignal(shutdownCallback func()) {
+	c := make(chan os.Signal)
+	signal.Notify(c, os.Interrupt)
+	go func() {
+		<-c
+		shutdownCallback()
 	}()
 }

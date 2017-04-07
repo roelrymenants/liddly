@@ -17,7 +17,7 @@ import (
 
 var repository repo.TiddlerRepo
 
-func Register(r repo.TiddlerRepo) {
+func RegisterHandlers(r repo.TiddlerRepo) {
 	repository = r
 
 	register("/", strictPath(allowOnly(index, "GET", "OPTIONS")))
