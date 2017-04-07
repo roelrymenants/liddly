@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"net/http"
 
@@ -9,12 +8,15 @@ import (
 	"os"
 	"os/signal"
 	"time"
+
+	"github.com/roelrymenants/liddly/repo"
+	"github.com/roelrymenants/liddly/tiddlyweb"
 )
 
 const lockfile = "./liddly.lock"
 const watchfile = "./liddly.shutdown"
 
-var repo TiddlerRepo
+var repository repo.TiddlerRepo
 var srv = http.Server{
 	Addr: ":8080",
 }
@@ -35,12 +37,6 @@ func main() {
 	}
 	defer folderWatch.Close()
 
-	register("/", strictPath(allowOnly(index, "GET", "OPTIONS")))
-	register("/status", strictPath(allowOnly(status, "GET")))
-	register("/recipes/all/tiddlers.json", strictPath(allowOnly(list, "GET")))
-	register("/recipes/all/tiddlers/", allowOnly(detail, "GET", "PUT"))
-	register("/bags/bag/tiddlers/", allowOnly(remove, "DELETE"))
-
 	shutdownOnCreate(folderWatch, watchfile, asyncShutdown)
 
 	c := make(chan os.Signal)
@@ -50,7 +46,8 @@ func main() {
 		asyncShutdown()
 	}()
 
-	repo = NewSqliteRepo("./tiddlers.db")
+	repository = repo.NewSqlite("./tiddlers.db")
+	tiddlyweb.Register(repository)
 
 	log.Println(srv.ListenAndServe())
 }
@@ -60,48 +57,6 @@ func asyncShutdown() {
 
 	if err := srv.Shutdown(ctx); err != nil {
 		log.Panic(err)
-	}
-}
-
-func register(pattern string, handler func(string) http.HandlerFunc) {
-	http.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
-		log.Println(r)
-
-		handler(pattern)(w, r)
-	})
-}
-func strictPath(handler func(string) http.HandlerFunc) func(string) http.HandlerFunc {
-	return func(pattern string) http.HandlerFunc {
-		return func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path != pattern {
-				log.Println("Request not allowed for strict path", r.URL.Path)
-				http.Error(w, fmt.Sprintf("Path not mapped: %v", r.URL.Path), http.StatusNotFound)
-				return
-			}
-
-			handler(pattern)(w, r)
-		}
-	}
-}
-
-func allowOnly(handler func(string) http.HandlerFunc, methods ...string) func(string) http.HandlerFunc {
-	return func(pattern string) http.HandlerFunc {
-		return func(w http.ResponseWriter, r *http.Request) {
-			var allowed = false
-
-			for _, method := range methods {
-				if r.Method == method {
-					allowed = true
-				}
-			}
-			if !allowed {
-				log.Printf("Method '%v' not allowed for path '%v'", r.Method, r.URL.Path)
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-				return
-			}
-
-			handler(pattern)(w, r)
-		}
 	}
 }
 
@@ -118,10 +73,4 @@ func shutdownOnCreate(folderWatch *FolderWatch, createdFile string, shutdownCall
 			}
 		}
 	}()
-}
-
-func jsonResponse(w http.ResponseWriter) http.ResponseWriter {
-	w.Header().Set("Content-Type", "application/json")
-
-	return w
 }

@@ -1,4 +1,4 @@
-package main
+package repo
 
 import (
 	"database/sql"
@@ -23,7 +23,7 @@ func DefaultDbFile() string {
 	return path.Join(exPath, "tiddlers.db")
 }
 
-func NewSqliteRepo(dbfile string) TiddlerRepo {
+func NewSqlite(dbfile string) TiddlerRepo {
 	db, err := sql.Open("sqlite3", dbfile)
 	if err != nil {
 		log.Fatal(err)

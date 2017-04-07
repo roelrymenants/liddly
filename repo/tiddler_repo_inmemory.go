@@ -1,19 +1,12 @@
-package main
+package repo
 
 import "fmt"
-
-type TiddlerRepo interface {
-	List() []Tiddler
-	Get(key string) (Tiddler, bool)
-	Put(tiddler Tiddler) (int, error)
-	Remove(key string) error
-}
 
 type inMemRepo struct {
 	tiddlers map[string]Tiddler
 }
 
-func InMemory() TiddlerRepo {
+func NewInMemory() TiddlerRepo {
 	return inMemRepo{tiddlers: make(map[string]Tiddler)}
 }
 
@@ -56,11 +49,4 @@ func (repo inMemRepo) Remove(key string) error {
 
 	delete(repo.tiddlers, key)
 	return nil
-}
-
-type Tiddler struct {
-	Title    string
-	Meta     []byte
-	Text     string
-	Revision int
 }

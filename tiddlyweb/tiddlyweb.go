@@ -1,4 +1,4 @@
-package main
+package tiddlyweb
 
 import (
 	"bytes"
@@ -11,7 +11,21 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/roelrymenants/liddly/repo"
 )
+
+var repository repo.TiddlerRepo
+
+func Register(r repo.TiddlerRepo) {
+	repository = r
+
+	register("/", strictPath(allowOnly(index, "GET", "OPTIONS")))
+	register("/status", strictPath(allowOnly(status, "GET")))
+	register("/recipes/all/tiddlers.json", strictPath(allowOnly(list, "GET")))
+	register("/recipes/all/tiddlers/", allowOnly(detail, "GET", "PUT"))
+	register("/bags/bag/tiddlers/", allowOnly(remove, "DELETE"))
+}
 
 func index(basepath string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -32,7 +46,7 @@ func status(basepath string) http.HandlerFunc {
 
 func list(basepath string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		list := repo.List()
+		list := repository.List()
 
 		var buff bytes.Buffer
 		buff.WriteString("[")
@@ -57,7 +71,7 @@ func detail(basepath string) http.HandlerFunc {
 
 		switch r.Method {
 		case "GET":
-			tiddler, ok := repo.Get(title)
+			tiddler, ok := repository.Get(title)
 			if !ok {
 				log.Printf("Tiddler not found: '%v'", title)
 				http.Error(w, "Not found", http.StatusNotFound)
@@ -76,7 +90,7 @@ func detail(basepath string) http.HandlerFunc {
 
 			json.NewEncoder(w).Encode(js)
 		case "PUT":
-			var tiddler Tiddler
+			var tiddler repo.Tiddler
 
 			var js map[string]interface{}
 			err := json.NewDecoder(r.Body).Decode(&js)
@@ -103,7 +117,7 @@ func detail(basepath string) http.HandlerFunc {
 			tiddler.Meta = meta
 
 			//create the tiddler
-			rev, err := repo.Put(tiddler)
+			rev, err := repository.Put(tiddler)
 			if err != nil {
 				log.Printf("Error saving tiddler '%v'", title)
 				http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -121,7 +135,7 @@ func remove(basepath string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		title := strings.TrimPrefix(r.URL.Path, basepath)
 
-		if err := repo.Remove(title); err != nil {
+		if err := repository.Remove(title); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 		w.WriteHeader(http.StatusNoContent)
