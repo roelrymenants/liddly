@@ -9,23 +9,36 @@ import (
 	"os/signal"
 	"time"
 
+	"flag"
+
 	"github.com/roelrymenants/liddly/repo"
 	"github.com/roelrymenants/liddly/tiddlyweb"
 )
 
 const lockfile = "./liddly.lock"
 const watchfile = "./liddly.shutdown"
+const dbfile = "./tiddlers.db"
 
 var repository repo.TiddlerRepo
-var srv = http.Server{
-	Addr: ":8080",
-}
+var srv http.Server
 
 func main() {
+	var address = flag.String("bind", ":8080", "The ip:port to listen on")
+	var preemptive = flag.Bool("preemptive", true, "Whether to create a shutdown file when already locked")
+	flag.Parse()
+
+	srv = http.Server{
+		Addr: *address,
+	}
+
 	lock, err := Acquire(lockfile)
 	if err != nil {
-		os.Create(watchfile)
-		log.Println("Lock file exists. Initialized remote shutdown.")
+		if *preemptive {
+			os.Create(watchfile)
+			log.Println("Lock file exists. Initialized remote shutdown.")
+		} else {
+			log.Println("Lock file exists. Did not initialize remote shutdown. Exit.")
+		}
 		return
 	}
 	defer lock.Release()
@@ -46,9 +59,10 @@ func main() {
 		asyncShutdown()
 	}()
 
-	repository = repo.NewSqlite("./tiddlers.db")
+	repository = repo.NewSqlite(dbfile)
 	tiddlyweb.Register(repository)
 
+	log.Println("Listening for connections on", *address)
 	log.Println(srv.ListenAndServe())
 }
 
