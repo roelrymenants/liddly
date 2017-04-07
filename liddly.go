@@ -1,142 +1,123 @@
 package main
 
 import (
-	"bytes"
-	"crypto/md5"
-	"encoding/json"
 	"fmt"
-	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
-	"net/url"
-	"strings"
+
+	"context"
+	"os"
+	"os/signal"
+	"time"
 )
 
-var repo = InMemory()
+const lockfile = "./liddly.lock"
+const watchfile = "./liddly.shutdown"
+
+var repo TiddlerRepo
+var srv = http.Server{
+	Addr: ":8080",
+}
 
 func main() {
-	fmt.Println("Ghello")
-
-	http.HandleFunc("/", index)
-	http.HandleFunc("/status", status)
-	http.HandleFunc("/recipes/all/tiddlers.json", list)
-	http.HandleFunc("/recipes/all/tiddlers/", detail)
-	http.HandleFunc("/bags/bag/tiddlers/", remove)
-
-	log.Fatal(http.ListenAndServe(":8080", nil))
-}
-
-func index(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != "/" {
-		http.Error(w, fmt.Sprintf("Path not mapped: %v", r.URL.Path), http.StatusNotFound)
+	lock, err := Acquire(lockfile)
+	if err != nil {
+		os.Create(watchfile)
+		log.Println("Lock file exists. Initialized remote shutdown.")
 		return
 	}
+	defer lock.Release()
 
-	http.ServeFile(w, r, "index.html")
-}
-
-func status(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "GET" {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	folderWatch, err := NewFolderWatch()
+	if err != nil {
+		log.Println("Could not start watch on current dir")
 		return
 	}
+	defer folderWatch.Close()
 
-	jsonResponse(w).Write([]byte(`{"username":"me","space":{"recipe":"all"}}`))
+	register("/", strictPath(allowOnly(index, "GET", "OPTIONS")))
+	register("/status", strictPath(allowOnly(status, "GET")))
+	register("/recipes/all/tiddlers.json", strictPath(allowOnly(list, "GET")))
+	register("/recipes/all/tiddlers/", allowOnly(detail, "GET", "PUT"))
+	register("/bags/bag/tiddlers/", allowOnly(remove, "DELETE"))
+
+	shutdownOnCreate(folderWatch, watchfile, asyncShutdown)
+
+	c := make(chan os.Signal)
+	signal.Notify(c, os.Interrupt)
+	go func() {
+		<-c
+		asyncShutdown()
+	}()
+
+	repo = NewSqliteRepo("./tiddlers.db")
+
+	log.Println(srv.ListenAndServe())
 }
 
-func list(w http.ResponseWriter, r *http.Request) {
-	list := repo.List()
+func asyncShutdown() {
+	ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
 
-	var buff bytes.Buffer
-	buff.WriteString("[")
-
-	for i, tiddler := range list {
-		if i != 0 {
-			buff.WriteString(",")
-		}
-		buff.Write(tiddler.Meta)
-
-	}
-
-	buff.WriteString("]")
-
-	jsonResponse(w).Write(buff.Bytes())
-}
-
-func detail(w http.ResponseWriter, r *http.Request) {
-	title := strings.TrimPrefix(r.URL.Path, "/recipes/all/tiddlers/")
-
-	switch r.Method {
-	case "GET":
-		tiddler, ok := repo.Get(title)
-		if !ok {
-			http.Error(w, "Not found", http.StatusNotFound)
-			return
-		}
-
-		var js map[string]interface{}
-		err := json.Unmarshal(tiddler.Meta, &js)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		if tiddler.Text != "" {
-			js["text"] = tiddler.Text
-		}
-
-		json.NewEncoder(w).Encode(js)
-	case "PUT":
-		var tiddler Tiddler
-
-		var js map[string]interface{}
-		err := json.NewDecoder(r.Body).Decode(&js)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		io.Copy(ioutil.Discard, r.Body)
-		js["bag"] = "bag"
-
-		text, _ := js["text"].(string)
-		delete(js, "text")
-
-		meta, err := json.Marshal(js)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		tiddler.Text = text
-		tiddler.Title = title
-		tiddler.Meta = meta
-
-		//create the tiddler
-		rev, err := repo.Put(tiddler)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		etag := fmt.Sprintf(`"bag/%s/%d:%032x"`, url.QueryEscape(title), rev, md5.Sum(meta))
-		w.Header().Set("ETag", etag)
-		w.WriteHeader(http.StatusNoContent)
-	default:
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Panic(err)
 	}
 }
 
-func remove(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "DELETE" {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
+func register(pattern string, handler func(string) http.HandlerFunc) {
+	http.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
+		log.Println(r)
 
-	title := strings.TrimPrefix(r.URL.Path, "/bags/bag/tiddlers/")
+		handler(pattern)(w, r)
+	})
+}
+func strictPath(handler func(string) http.HandlerFunc) func(string) http.HandlerFunc {
+	return func(pattern string) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != pattern {
+				log.Println("Request not allowed for strict path", r.URL.Path)
+				http.Error(w, fmt.Sprintf("Path not mapped: %v", r.URL.Path), http.StatusNotFound)
+				return
+			}
 
-	if err := repo.Remove(title); err != nil {
-		http.Error(w, err.Error(), 500)
+			handler(pattern)(w, r)
+		}
 	}
+}
+
+func allowOnly(handler func(string) http.HandlerFunc, methods ...string) func(string) http.HandlerFunc {
+	return func(pattern string) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			var allowed = false
+
+			for _, method := range methods {
+				if r.Method == method {
+					allowed = true
+				}
+			}
+			if !allowed {
+				log.Printf("Method '%v' not allowed for path '%v'", r.Method, r.URL.Path)
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+
+			handler(pattern)(w, r)
+		}
+	}
+}
+
+func shutdownOnCreate(folderWatch *FolderWatch, createdFile string, shutdownCallback func()) {
+	go func() {
+		for {
+			if e := <-folderWatch.Events; e != createdFile {
+				continue
+			} else {
+				defer os.Remove(createdFile)
+
+				shutdownCallback()
+				return
+			}
+		}
+	}()
 }
 
 func jsonResponse(w http.ResponseWriter) http.ResponseWriter {
