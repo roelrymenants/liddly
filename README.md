@@ -1,20 +1,22 @@
 # liddly
-A local tiddlywiki server
+A local [tiddlywiki](http://tiddlywiki.com) server with a sqlite backend
 
 ## Building
 Prerequisites:
-golang v1.8
+* golang v1.8.1
+* github.com/rakyll/static
+* Everything necessary to compile github.com/mattn/go-sqlite3
 
 ```
+$ go get github.com/rakyll/statik
 $ go get github.com/roelrymenants/liddly
+$ cd $GOPATH/src/github.com/roelrymenants/liddly
+$ go generate
+$ go install github.com/roelrymenants/liddly
 ```
+
 ## Usage
-Prerequisites:
-An empty tiddlywiki (with at least tiddlyweb/tiddlyspace plugin installed) called `index.html` in the working directory.
-
-See also http://tiddlywiki.com/
-
-Running `liddly` will start an http server on port 8080. Accessing it with a browser will serve tiddlywiki.
+Running `liddly` will start an http server on port 8080. The default browser will open automatically
 Tiddlers are saved in a sqlite db (`tiddlers.db`) in the working directory
 
 To allow running from dropbox, a lock file (`tiddlers.lock`) is placed in the working directory.

@@ -1,3 +1,5 @@
+//go:generate statik -src=./web
+
 package main
 
 import (
@@ -21,6 +23,9 @@ import (
 
 	"github.com/roelrymenants/liddly/repo"
 	"github.com/roelrymenants/liddly/tiddlyweb"
+
+	"github.com/rakyll/statik/fs"
+	_ "github.com/roelrymenants/liddly/statik"
 )
 
 const lockfile = "./liddly.lock"
@@ -65,8 +70,13 @@ func main() {
 	shutdownOnCreate(folderWatch, watchfile, asyncShutdown)
 	shutdownOnSignal(asyncShutdown)
 
+	statikFS, err := fs.New()
+	if err != nil {
+		log.Println(err)
+	}
+
 	repository = repo.NewSqlite(dbfile)
-	tiddlyweb.RegisterHandlers(repository)
+	tiddlyweb.RegisterHandlers(repository, statikFS)
 
 	log.Println("Listening for connections on", *address)
 
