@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"flag"
+	"fmt"
 
 	"github.com/roelrymenants/liddly/repo"
 	"github.com/roelrymenants/liddly/tiddlyweb"
@@ -18,6 +19,7 @@ import (
 const lockfile = "./liddly.lock"
 const watchfile = "./liddly.shutdown"
 const dbfile = "./tiddlers.db"
+const version = "v0.2"
 
 var repository repo.TiddlerRepo
 var srv http.Server
@@ -25,7 +27,13 @@ var srv http.Server
 func main() {
 	var address = flag.String("bind", ":8080", "The ip:port to listen on")
 	var preemptive = flag.Bool("preemptive", true, "Whether to create a shutdown file when already locked")
+	var showVersion = flag.Bool("version", false, "Display version string")
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Println(version)
+		return
+	}
 
 	srv = http.Server{
 		Addr: *address,
