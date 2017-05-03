@@ -31,7 +31,7 @@ func NewSqlite(dbfile string) TiddlerRepo {
 
 	tableCreate :=
 		`CREATE TABLE IF NOT EXISTS tiddlers ( 
-    title TEXT, 
+	title TEXT, 
 	meta BLOB, 
 	text TEXT, 
 	revision INTEGER,

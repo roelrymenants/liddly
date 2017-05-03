@@ -2,8 +2,8 @@ package repo
 
 import "testing"
 
-func TestInMemRepo(t *testing.T) {
-	var repo = NewInMemory()
+func TestSQLiteRepo(t *testing.T) {
+	var repo = NewSqlite(":memory:")
 
 	if len(repo.List()) != 0 {
 		t.Error("Not empty repo on init")
