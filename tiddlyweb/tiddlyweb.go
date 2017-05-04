@@ -13,29 +13,20 @@ import (
 	"strings"
 
 	"github.com/roelrymenants/liddly/repo"
+
+	_ "github.com/roelrymenants/liddly/statik"
 )
 
 var repository repo.TiddlerRepo
 
-func RegisterHandlers(r repo.TiddlerRepo) {
+func RegisterHandlers(r repo.TiddlerRepo, fs http.FileSystem) {
 	repository = r
 
-	register("/", strictPath(allowOnly(index, "GET", "OPTIONS")))
+	http.Handle("/", http.StripPrefix("/", http.FileServer(fs)))
 	register("/status", strictPath(allowOnly(status, "GET")))
 	register("/recipes/all/tiddlers.json", strictPath(allowOnly(list, "GET")))
 	register("/recipes/all/tiddlers/", allowOnly(detail, "GET", "PUT"))
 	register("/bags/bag/tiddlers/", allowOnly(remove, "DELETE"))
-}
-
-func index(basepath string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case "GET":
-			http.ServeFile(w, r, "index.html")
-		case "OPTIONS":
-			w.WriteHeader(http.StatusNoContent)
-		}
-	}
 }
 
 func status(basepath string) http.HandlerFunc {

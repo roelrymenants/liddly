@@ -32,3 +32,9 @@ $ cd $GOPATH/src/github.com/roelrymenants/liddly
 $ go generate
 $ go install github.com/roelrymenants/liddly
 ```
+
+#TiddlyWiki
+
+The web folder contains an empty version of tiddlywiki with the tiddlyweb/tiddlyspaces plugin
+already installed.
+See tiddlywiki.license for copyright and licensing.
