@@ -1,0 +1,10 @@
+---
+machine:
+  environment:
+    MAJOR_VERSION: v0.2
+    VERSION: ${MAJOR_VERSION}.${CIRCLE_BUILD_NUM}
+    BINARY: liddly-${VERSION}
+dependencies:
+  override:
+    - xgo -out ${BINARY} --target=linux/amd64,windows/amd64,darwin/amd64 .
+    - mv ${BINARY}-* ${CIRCLE_ARTIFACTS}
