@@ -5,6 +5,8 @@ machine:
     VERSION: ${MAJOR_VERSION}.${CIRCLE_BUILD_NUM}
     BINARY: liddly-${VERSION}
 dependencies:
+  pre:
+    - go get github.com/karalabe/xgo
   override:
     - xgo -out ${BINARY} --target=linux/amd64,windows/amd64,darwin/amd64 .
     - mv ${BINARY}-* ${CIRCLE_ARTIFACTS}
