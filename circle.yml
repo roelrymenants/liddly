@@ -1,5 +1,7 @@
 ---
 machine:
+  services:
+    - docker #Need it for xgo
   environment:
     MAJOR_VERSION: v0.2
     VERSION: ${MAJOR_VERSION}.${CIRCLE_BUILD_NUM}
