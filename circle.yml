@@ -8,5 +8,5 @@ dependencies:
   pre:
     - go get github.com/karalabe/xgo
   override:
-    - xgo -out ${BINARY} --target=linux/amd64,windows/amd64,darwin/amd64 .
+    - xgo -out ${BINARY} --targets=linux/amd64,windows/amd64,darwin/amd64 .
     - mv ${BINARY}-* ${CIRCLE_ARTIFACTS}
